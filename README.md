@@ -1,9 +1,9 @@
 # express-rest-api-boilerplate
 
-> Express REST API with JWT Authentication and support for sqlite, mysql, and postgresql
+> hapi REST API with JWT Authentication and support for sqlite, mysql, and postgresql
 
 - authentication via [JWT](https://jwt.io/)
-- routes mapping via [express-routes-mapper](https://github.com/aichbauer/express-routes-mapper)
+- routes mapping via [hapi](https://hapi.dev/) plugins
 - support for [sqlite](https://www.sqlite.org/), [mysql](https://www.mysql.com/), and [postgresql](https://www.postgresql.org/)
 - environments for `development`, `testing`, and `production`
 - linting via [eslint](https://github.com/eslint/eslint)
@@ -90,9 +90,9 @@ Example Controller for all **CRUD** oparations:
 const Model = require('../models/Model');
 
 const ModelController = () => {
-  const create = async (req, res) => {
+  const create = async (request, h) => {
     // body is part of a form-data
-    const { value } = req.body;
+    const { value } = request.app.body;
 
     try {
       const model = await Model.create({
@@ -100,38 +100,38 @@ const ModelController = () => {
       });
 
       if(!model) {
-        return res.status(400).json({ msg: 'Bad Request: Model not found' });
+        return h.response({ msg: 'Bad Request: Model not found' }).code(400);
       }
 
-      return res.status(200).json({ model });
+      return h.response({ model }).code(200);
     } catch (err) {
       // better save it to log file
       console.error(err);
 
-      return res.status(500).json({ msg: 'Internal server error' });
+      return h.response({ msg: 'Internal server error' }).code(500);
     }
   };
 
-  const getAll = async (req, res) => {
+  const getAll = async (request, h) => {
     try {
       const model = await Model.findAll();
 
       if(!models){
-        return res.status(400).json({ msg: 'Bad Request: Models not found' });
+        return h.response({ msg: 'Bad Request: Models not found' }).code(400);
       }
 
-      return res.status(200).json({ models });
+      return h.response({ models }).code(200);
     } catch (err) {
       // better save it to log file
       console.error(err);
 
-      return res.status(500).json({ msg: 'Internal server error' });
+      return h.response({ msg: 'Internal server error' }).code(500);
     }
   };
 
-  const get = async (req, res) => {
+  const get = async (request, h) => {
     // params is part of an url
-    const { id } = req.params;
+    const { id } = request.params;
 
     try {
       const model = await Model.findOne({
@@ -141,64 +141,64 @@ const ModelController = () => {
       });
 
       if(!model) {
-        return res.status(400).json({ msg: 'Bad Request: Model not found' });
+        return h.response({ msg: 'Bad Request: Model not found' }).code(400);
       }
 
-      return res.status(200).json({ model });
+      return h.response({ model }).code(200);
     } catch (err) {
       // better save it to log file
       console.error(err);
 
-      return res.status(500).json({ msg: 'Internal server error' });
+      return h.response({ msg: 'Internal server error' }).code(500);
     }
   };
 
-  const update = async (req, res) => {
+  const update = async (request, h) => {
     // params is part of an url
-    const { id } = req.params;
+    const { id } = request.params;
 
     // body is part of form-data
-    const { value } = req.body;
+    const { value } = request.app.body;
 
     try {
       const model = await Model.findById(id);
 
       if(!model) {
-        return res.status(400).json({ msg: 'Bad Request: Model not found' });
+        return h.response({ msg: 'Bad Request: Model not found' }).code(400);
       }
 
       const updatedModel = await model.update({
         key: value,
       )};
 
-      return res.status(200).json({ updatedModel });
+      return h.response({ updatedModel }).code(200);
     } catch (err) {
       // better save it to log file
       console.error(err);
 
-      return res.status(500).json({ msg: 'Internal server error' });
+      return h.response({ msg: 'Internal server error' }).code(500);
     }
   };
 
-  const destroy = async (req, res) => {
+  const destroy = async (request, h) => {
     // params is part of an url
-    const { id } = req.params;
+    const { id } = request.params;
 
     try {
       const model =  Model.findById(id);
 
       if(!model) {
-        return res.status(400).json({ msg: 'Bad Request: Model not found' })
+        return h.response({ msg: 'Bad Request: Model not found' }).code(400)
       }
 
       await model.destroy();
 
-      return res.status(200).json({ msg: 'Successfully destroyed model' });
+      return h.response({ msg: 'Successfully destroyed model' }).code(200);
     } catch (err) {
       // better save it to log file
       console.error(err);
 
-      return res.status(500).json({ msg: 'Internal server error' });
+      return h.response({ msg: 'Internal server error' }).code(500);
     }
   };
 
@@ -274,7 +274,7 @@ module.exports = User;
 
 ## Policies
 
-Policies are middleware functions that can run before hitting a apecific or more specified route(s).
+Policies are extension functions that can run before hitting a apecific or more specified route(s).
 
 Example policy:
 
@@ -283,19 +283,19 @@ Only allow if the user is marked as admin.
 > Note: this is not a secure example, only for presentation puposes
 
 ```js
-module.exports = (req, res, next) => {
-  if(req.body.userrole === 'admin') {
+module.exports = (request, h) => {
+  if(request.app.body.userrole === 'admin') {
     // do some verification stuff
-    const verified = verifyAdmin(req.body.userid);
+    const verified = verifyAdmin(request.app.body.userid);
 
     if(verified) {
-      return next();
+      return h.continue;
     }
 
-    return res.status(401).json({ msg: 'Unauthorized' });
+    return h.response({ msg: 'Unauthorized' }).code(401).takeover();
   }
 
-  return res.status(401).json({ msg: 'Unauthorized' });
+  return h.response({ msg: 'Unauthorized' }).code(401).takeover();
 };
 ```
 
@@ -306,7 +306,9 @@ api.js
 ```js
 const adminPolicy = require('./policies/admin.policy');
 
-app.all('/admin/*', (req, res, next) => adminPolicy(req,res,next));
+server.ext('onRequest', (request, h) => (
+  /^\/admin\/(.*)$/i.test(request.path) ? adminPolicy(request, h) : h.continue
+));
 ```
 
 Or for one specific route
@@ -316,25 +318,34 @@ api.js
 ```js
 const adminPolicy = require('./policies/admin.policy');
 
-app.get('/admin/myroute',
-  (req, res, next) => adminPolicy(req,res,next),
-  (req, res) => {
+server.route({
+  method: 'GET',
+  path: '/admin/myroute',
+  options: {
+    ext: {
+      onPreHandler: [{ method: adminPolicy }],
+    },
+  },
+  handler: (request, h) => {
   //do some fancy stuff
+  },
 });
 ```
 
 ## auth.policy
 
 The `auth.policy` checks wether a `JSON Web Token` ([further information](https://jwt.io/)) is send in the header of an request as `Authorization: Bearer [JSON Web Token]` or inside of the body of an request as `token: [JSON Web Token]`.
-The policy runs default on all api routes that are are prefixed with `/private`. To map multiple routes read the [docs](https://github.com/aichbauer/express-routes-mapper/blob/master/README.md) from `express-routes-mapper`.
+The policy runs default on all api routes that are are prefixed with `/private`. To map multiple routes read the [docs](https://hapi.dev/api/#-serverrouteroute) from `hapi`.
 
 To use this policy on all routes of a specific prefix:
 
 app.js
 
 ```js
-app.use('/prefix', yourRoutes);
-app.all('/prefix', (req, res, next) => auth(req, res, next));
+await server.register({ plugin: yourRoutes, routes: { prefix: '/prefix' } });
+server.ext('onRequest', (request, h) => (
+  /^\/prefix\/(.*)$/i.test(request.path) ? auth(request, h) : h.continue
+));
 ```
 
 or to use this policy on one specific route:
@@ -342,10 +353,17 @@ or to use this policy on one specific route:
 app.js
 
 ```js
-app.get('/specificRoute',
-  (req, res, next) => auth(req, res, next),
-  (req, res) => {
+server.route({
+  method: 'GET',
+  path: '/specificRoute',
+  options: {
+    ext: {
+      onPreHandler: [{ method: auth }],
+    },
+  },
+  handler: (request, h) => {
   // do some fancy stuff
+  },
 });
 ```
 
@@ -419,21 +437,48 @@ Here you define all your routes for your api. It doesn't matter how you structur
 
 ## Create Routes
 
-For further information read the [docs](https://github.com/aichbauer/express-routes-mapper/blob/master/README.md) of express-routes-mapper.
+For further information read the [docs](https://hapi.dev/api/#-serverrouteroute) of hapi.
 
 Example for User Model:
 
-> Note: Only supported Methods are **POST**, **GET**, **PUT**, and **DELETE**.
+> Note: a route file is a hapi plugin, so it has a `name` and a `register` function.
 
 userRoutes.js
 
 ```js
+const UserController = require('../../api/controllers/UserController');
+
 const userRoutes = {
-  'POST /user': 'UserController.create',
-  'GET /users': 'UserController.getAll',
-  'GET /user/:id': 'UserController.get',
-  'PUT /user/:id': 'UserController.update',
-  'DELETE /user/': 'UserController.destroy',
+  name: 'userRoutes',
+  register: (server) => {
+    server.route([
+      {
+        method: 'POST',
+        path: '/user',
+        handler: UserController().create,
+      },
+      {
+        method: 'GET',
+        path: '/users',
+        handler: UserController().getAll,
+      },
+      {
+        method: 'GET',
+        path: '/user/{id}',
+        handler: UserController().get,
+      },
+      {
+        method: 'PUT',
+        path: '/user/{id}',
+        handler: UserController().update,
+      },
+      {
+        method: 'DELETE',
+        path: '/user',
+        handler: UserController().destroy,
+      },
+    ]);
+  },
 };
 
 module.exports = userRoutes;
@@ -455,12 +500,12 @@ module.exports = config;
 api.js
 
 ```js
-const mappedUserRoutes = mapRoutes(config.userRoutes, 'api/controllers/');
-
-app.use('/prefix', mappedUserRoutes);
+await server.register({ plugin: config.userRoutes, routes: { prefix: '/prefix' } });
 
 // to protect them with authentication
-app.all('/prefix/*', (req, res, next) => auth(req, res, next));
+server.ext('onRequest', (request, h) => (
+  /^\/prefix\/(.*)$/i.test(request.path) ? auth(request, h) : h.continue
+));
 ```
 
 ## Test
@@ -469,7 +514,7 @@ All test for this boilerplate uses [Jest](https://github.com/facebook/jest) and 
 
 ### Setup
 
-The setup directory holds the `_setup.js` which holds `beforeAction` which starts a test express application and connects to your test database, and a `afterAction` which closes the db connection.
+The setup directory holds the `_setup.js` which holds `beforeAction` which starts a test hapi application and connects to your test database, and a `afterAction` which closes the db connection.
 
 ### Controller
 

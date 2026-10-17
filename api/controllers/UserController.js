@@ -3,8 +3,8 @@ const authService = require('../services/auth.service');
 const bcryptService = require('../services/bcrypt.service');
 
 const UserController = () => {
-  const register = async (req, res) => {
-    const { body } = req;
+  const register = async (request, h) => {
+    const { body } = request.app;
 
     if (body.password === body.password2) {
       try {
@@ -14,18 +14,18 @@ const UserController = () => {
         });
         const token = authService().issue({ id: user.id });
 
-        return res.status(200).json({ token, user });
+        return h.response({ token, user }).code(200);
       } catch (err) {
         console.log(err);
-        return res.status(500).json({ msg: 'Internal server error' });
+        return h.response({ msg: 'Internal server error' }).code(500);
       }
     }
 
-    return res.status(400).json({ msg: 'Bad Request: Passwords don\'t match' });
+    return h.response({ msg: 'Bad Request: Passwords don\'t match' }).code(400);
   };
 
-  const login = async (req, res) => {
-    const { email, password } = req.body;
+  const login = async (request, h) => {
+    const { email, password } = request.app.body;
 
     if (email && password) {
       try {
@@ -37,45 +37,47 @@ const UserController = () => {
           });
 
         if (!user) {
-          return res.status(400).json({ msg: 'Bad Request: User not found' });
+          return h.response({ msg: 'Bad Request: User not found' }).code(400);
         }
 
         if (bcryptService().comparePassword(password, user.password)) {
           const token = authService().issue({ id: user.id });
 
-          return res.status(200).json({ token, user });
+          return h.response({ token, user }).code(200);
         }
 
-        return res.status(401).json({ msg: 'Unauthorized' });
+        return h.response({ msg: 'Unauthorized' }).code(401);
       } catch (err) {
         console.log(err);
-        return res.status(500).json({ msg: 'Internal server error' });
+        return h.response({ msg: 'Internal server error' }).code(500);
       }
     }
 
-    return res.status(400).json({ msg: 'Bad Request: Email or password is wrong' });
+    return h.response({ msg: 'Bad Request: Email or password is wrong' }).code(400);
   };
 
-  const validate = (req, res) => {
-    const { token } = req.body;
+  const validate = (request, h) => {
+    const { token } = request.app.body;
 
-    authService().verify(token, (err) => {
-      if (err) {
-        return res.status(401).json({ isvalid: false, err: 'Invalid Token!' });
-      }
+    return new Promise((resolve) => {
+      authService().verify(token, (err) => {
+        if (err) {
+          return resolve(h.response({ isvalid: false, err: 'Invalid Token!' }).code(401));
+        }
 
-      return res.status(200).json({ isvalid: true });
+        return resolve(h.response({ isvalid: true }).code(200));
+      });
     });
   };
 
-  const getAll = async (req, res) => {
+  const getAll = async (request, h) => {
     try {
       const users = await User.findAll();
 
-      return res.status(200).json({ users });
+      return h.response({ users }).code(200);
     } catch (err) {
       console.log(err);
-      return res.status(500).json({ msg: 'Internal server error' });
+      return h.response({ msg: 'Internal server error' }).code(500);
     }
   };
 
